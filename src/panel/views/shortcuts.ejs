@@ -1,0 +1,127 @@
+<%- include('partials/header') %>
+
+<div class="container-fluid p-0">
+    <div class="row mb-3">
+        <div class="col-6">
+            <h1 class="h3">Hazır Cevaplar (Kısayollar)</h1>
+        </div>
+        <div class="col-6 text-end">
+            <button class="btn btn-primary" onclick="openModal()">+ Yeni Kısayol</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Anahtar Kelime</th>
+                            <th>Kategori</th>
+                            <th>Cevap İçeriği</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (shortcuts && shortcuts.length > 0) { %>
+                            <% shortcuts.forEach(s => { %>
+                            <tr>
+                                <td><span class="badge bg-info text-dark"><%= s.keyword %></span></td>
+                                <td><%= s.category %></td>
+                                <td class="text-truncate" style="max-width: 400px;"><%= s.message_content %></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editShortcut('<%= Buffer.from(JSON.stringify(s)).toString('base64') %>')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteShortcut(<%= s.id %>)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        <% } else { %>
+                            <tr><td colspan="4" class="text-center">Kısayol bulunamadı.</td></tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="shortcutModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Kısayol Düzenle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="shortcutForm">
+            <input type="hidden" name="id" id="sid">
+            <div class="mb-3">
+                <label class="form-label">Anahtar Kelime (Küçük harf, boşluksuz)</label>
+                <input type="text" class="form-control" name="keyword" id="skeyword" placeholder="örn: guven_ssl" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Kategori</label>
+                <input type="text" class="form-control" name="category" id="scategory" placeholder="örn: guven">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Botun Vereceği Cevap</label>
+                <textarea class="form-control" name="message_content" id="scontent" rows="5" required></textarea>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-primary" onclick="saveShortcut()">Kaydet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    let shortcutModal;
+    document.addEventListener('DOMContentLoaded', function() {
+        shortcutModal = new bootstrap.Modal(document.getElementById('shortcutModal'));
+    });
+
+    function openModal() {
+        document.getElementById('shortcutForm').reset();
+        document.getElementById('sid').value = '';
+        shortcutModal.show();
+    }
+
+    function editShortcut(base64Json) {
+        const s = JSON.parse(atob(base64Json));
+        document.getElementById('sid').value = s.id;
+        document.getElementById('skeyword').value = s.keyword;
+        document.getElementById('scategory').value = s.category;
+        document.getElementById('scontent').value = s.message_content;
+        shortcutModal.show();
+    }
+
+    async function saveShortcut() {
+        const formData = new FormData(document.getElementById('shortcutForm'));
+        const data = Object.fromEntries(formData.entries());
+        try {
+            const res = await fetch('/api/shortcuts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if(result.success) location.reload();
+            else alert("Hata: " + result.error);
+        } catch(e) { alert("Hata!"); }
+    }
+
+    async function deleteShortcut(id) {
+        if(confirm("Silmek istediğine emin misin?")) {
+            await fetch(`/api/shortcuts/${id}`, { method: 'DELETE' });
+            location.reload();
+        }
+    }
+</script>
+<%- include('partials/footer') %>

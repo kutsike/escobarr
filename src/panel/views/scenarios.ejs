@@ -1,0 +1,156 @@
+<%- include('partials/header') %>
+
+<div class="container-fluid p-0">
+    <div class="row mb-3">
+        <div class="col-6">
+            <h1 class="h3">Dümen Yönetimi (Aşamalar)</h1>
+        </div>
+        <div class="col-6 text-end">
+            <button class="btn btn-primary" onclick="openModal()">+ Yeni Aşama Ekle</button>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Sıra</th>
+                            <th>Aşama Adı (GOL)</th>
+                            <th>Tutar</th>
+                            <th>Başlangıç Metni</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (stages && stages.length > 0) { %>
+                            <% stages.forEach(stage => { %>
+                            <tr>
+                                <td><span class="badge bg-dark rounded-pill"><%= stage.stage_order %></span></td>
+                                <td><%= stage.name %></td>
+                                <td class="fw-bold text-success"><%= stage.amount %> ₺</td>
+                                <td class="small text-truncate" style="max-width: 200px;"><%= stage.script_initial %></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editStage('<%= Buffer.from(JSON.stringify(stage)).toString('base64') %>')">
+                                        <i class="bi bi-pencil"></i> Düzenle
+                                    </button>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        <% } else { %>
+                            <tr><td colspan="5" class="text-center">Henüz senaryo eklenmemiş.</td></tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="stageModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Aşama Ekle/Düzenle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="stageForm">
+            <input type="hidden" name="id" id="stageId">
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">Aşama Adı</label>
+                    <input type="text" class="form-control" name="name" id="stageName" placeholder="Örn: 1. GOL - Dosya Masrafı" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tutar (TL)</label>
+                    <input type="number" class="form-control" name="amount" id="stageAmount" required>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Başlangıç Metni</label>
+                <textarea class="form-control" name="script_initial" id="stageScriptInitial" rows="2" placeholder="Botun ilk söyleyeceği şey..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">İkna Metni (İtiraz ederse)</label>
+                <textarea class="form-control" name="script_persuasion" id="stageScriptPersuasion" rows="2" placeholder="İtiraz durumunda söylenecek..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Evrak Şablonu</label>
+                <select class="form-select" name="doc_template_id" id="stageDoc">
+                    <option value="">-- Evrak Yok --</option>
+                    <% if(docs) { docs.forEach(doc => { %>
+                        <option value="<%= doc.id %>"><%= doc.name %></option>
+                    <% }); } %>
+                </select>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-primary" onclick="saveStage()">Kaydet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    // Bootstrap 5 Modal
+    let stageModal;
+    document.addEventListener('DOMContentLoaded', function() {
+        stageModal = new bootstrap.Modal(document.getElementById('stageModal'));
+    });
+
+    function openModal() {
+        document.getElementById('stageForm').reset();
+        document.getElementById('stageId').value = '';
+        document.getElementById('modalTitle').innerText = 'Yeni Aşama Ekle';
+        stageModal.show();
+    }
+
+    function editStage(base64Json) {
+        try {
+            const json = atob(base64Json); // Base64 decode
+            const stage = JSON.parse(json);
+            
+            document.getElementById('stageId').value = stage.id;
+            document.getElementById('stageName').value = stage.name;
+            document.getElementById('stageAmount').value = stage.amount;
+            document.getElementById('stageScriptInitial').value = stage.script_initial;
+            document.getElementById('stageScriptPersuasion').value = stage.script_persuasion;
+            document.getElementById('stageDoc').value = stage.doc_template_id || "";
+            
+            document.getElementById('modalTitle').innerText = 'Aşamayı Düzenle';
+            stageModal.show();
+        } catch(e) {
+            alert("Veri yüklenirken hata oluştu.");
+            console.error(e);
+        }
+    }
+
+    async function saveStage() {
+        const form = document.getElementById('stageForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+            const res = await fetch('/api/scenarios', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if(result.success) {
+                location.reload();
+            } else {
+                alert("Hata: " + (result.error || "Bilinmeyen hata"));
+            }
+        } catch(e) {
+            alert("Sunucu hatası!");
+        }
+    }
+</script>
+
+<%- include('partials/footer') %>

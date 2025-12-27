@@ -1,0 +1,146 @@
+<%- include('partials/header') %>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/mode-html.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/theme-monokai.min.js"></script>
+
+<style>
+    #editor { width: 100%; height: 600px; border-radius: 8px; }
+    .phone-mockup {
+        width: 375px; height: 812px; background: #fff;
+        border: 12px solid #1f2937; border-radius: 40px;
+        margin: 0 auto; overflow: hidden; position: relative;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    }
+    .phone-notch {
+        position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+        width: 150px; height: 30px; background: #1f2937;
+        border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; z-index: 10;
+    }
+    #previewFrame { width: 100%; height: 100%; border: none; background: #f3f4f6; }
+</style>
+
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Evrak Tasarım Stüdyosu</h1>
+        <div class="d-flex gap-2">
+            <select class="form-select w-auto" id="docSelect" onchange="loadDoc()">
+                <option value="new">+ Yeni Tasarım</option>
+                <% if(typeof docs !== 'undefined' && docs) { %>
+                    <% docs.forEach(function(doc) { %>
+                        <option value="<%= doc.id %>"><%= doc.name %></option>
+                    <% }); %>
+                <% } %>
+            </select>
+            <button class="btn btn-success" onclick="saveDoc()">Kaydet</button>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white p-2">
+                    <input type="text" class="form-control" id="docName" placeholder="Şablon Adı (Örn: Garanti Dekont)">
+                </div>
+                <div class="card-body p-0">
+                    <div id="editor"></div>
+                </div>
+                <div class="card-footer bg-light d-flex gap-2 flex-wrap">
+                    <small class="text-muted">Değişkenler:</small>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="insertVar('{AD_SOYAD}')">AD SOYAD</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="insertVar('{TUTAR}')">TUTAR</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="insertVar('{TARIH}')">TARIH</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="insertVar('{SAAT}')">SAAT</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="phone-mockup">
+                <div class="phone-notch"></div>
+                <iframe id="previewFrame"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/html");
+    
+    // Varsayılan Basit Şablon
+    var defaultCode = '<!DOCTYPE html>\n<html>\n<body style="text-align:center; padding:50px;">\n<h2>DEKONT</h2>\n<p>Sayın {AD_SOYAD},</p>\n<h1 style="color:green">-{TUTAR} TL</h1>\n<p>Tarih: {TARIH}</p>\n</body>\n</html>';
+    
+    editor.setValue(defaultCode, -1);
+
+    // Önizleme Fonksiyonu
+    function updatePreview() {
+        var code = editor.getValue();
+        // Mock Data ile değiştir
+        code = code.replace(/{AD_SOYAD}/g, 'AHMET YILMAZ')
+                   .replace(/{TUTAR}/g, '15.450,00')
+                   .replace(/{TARIH}/g, new Date().toLocaleDateString('tr-TR'))
+                   .replace(/{SAAT}/g, '14:30');
+                   
+        // EJS taglerini gizle (Önizlemede patlamaması için)
+        code = code.replace(/<%[\s\S]*?%>/g, '');
+        
+        document.getElementById('previewFrame').srcdoc = code;
+    }
+
+    editor.session.on('change', function() {
+        setTimeout(updatePreview, 500);
+    });
+    updatePreview();
+
+    function insertVar(txt) {
+        editor.insert(txt);
+        editor.focus();
+    }
+
+    async function loadDoc() {
+        var id = document.getElementById('docSelect').value;
+        if(id === 'new') {
+            document.getElementById('docName').value = '';
+            editor.setValue(defaultCode, -1);
+            return;
+        }
+        try {
+            var res = await fetch('/api/documents/' + id);
+            var data = await res.json();
+            if(data.success && data.doc) {
+                document.getElementById('docName').value = data.doc.name;
+                editor.setValue(data.doc.html_content, -1);
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function saveDoc() {
+        var name = document.getElementById('docName').value;
+        var html = editor.getValue();
+        var id = document.getElementById('docSelect').value;
+        
+        if(!name) return alert("İsim giriniz");
+        
+        var payload = { name: name, html_content: html };
+        if(id !== 'new') payload.id = id;
+
+        try {
+            var res = await fetch('/api/documents', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            var d = await res.json();
+            if(d.success) {
+                alert("Kaydedildi!");
+                if(id === 'new') location.reload();
+            } else {
+                alert("Hata: " + d.error);
+            }
+        } catch(e) { alert("Hata"); }
+    }
+</script>
+
+<%- include('partials/footer') %>
