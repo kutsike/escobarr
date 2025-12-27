@@ -89,37 +89,43 @@ Kullanıcı aşağıdaki konularda yardım isterse:
       .replaceAll("{city}", profile?.city || "Bilinmiyor")
       .replaceAll("{phone}", profile?.phone || "Bilinmiyor");
   }
-async analyzeUserCharacter(profile) {
+/**
+   * Kullanıcı profil özeti oluştur (yönetim paneli için)
+   * Bu fonksiyon sadece bilgilendirme amaçlıdır.
+   */
+  async generateProfileSummary(profile) {
     if (!this.openai) return "AI servisi aktif değil.";
 
     try {
       const prompt = `
-      Sen uzman bir insan sarrafı ve psikologsun. Aşağıdaki verilere dayanarak bu kişi hakkında kısa, vurucu ve nokta atışı bir karakter analizi yap.
-      
-      Kişi Bilgileri:
-      - Adı: ${profile.full_name || "Bilinmiyor"}
-      - Şehir: ${profile.city || "Bilinmiyor"}
-      - Meslek: ${profile.job || "Belirtilmemiş"}
-      - Yaş/D.Tarihi: ${profile.birth_date || "Bilinmiyor"}
-      - Sorunu/Derdi: ${profile.subject || "Henüz anlatmadı"}
-      - Konuşma Üslubu: (Genel çıkarım yap)
+      Aşağıdaki bilgilere dayanarak kısa bir profil özeti oluştur.
+      Bu özet, kullanıcıya daha iyi yardımcı olmak için kullanılacaktır.
 
-      İstenen Çıktı:
-      Maddeler halinde değil, 3-4 cümlelik tek bir paragraf olsun. Kişinin sosyo-ekonomik durumu, duygusal hali ve yaklaşım tarzı hakkında tahminlerde bulun.
+      Kişi Bilgileri:
+      - Adı: ${profile.full_name || "Belirtilmemiş"}
+      - Şehir: ${profile.city || "Belirtilmemiş"}
+      - Konu: ${profile.subject || "Henüz belirtilmedi"}
+
+      Lütfen 2-3 cümlelik kısa ve saygılı bir özet oluştur.
       `;
 
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: [{ role: "system", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 200
+        temperature: 0.5,
+        max_tokens: 150
       });
 
       return completion.choices[0].message.content;
     } catch (e) {
-      console.error("Analiz hatası:", e);
-      return "Analiz oluşturulurken hata oluştu.";
+      console.error("Özet hatası:", e);
+      return "Özet oluşturulurken hata oluştu.";
     }
+  }
+
+  // Eski fonksiyon adı için uyumluluk
+  async analyzeUserCharacter(profile) {
+    return this.generateProfileSummary(profile);
   }
   /**
    * Sohbet geçmişini formatlı şekilde al

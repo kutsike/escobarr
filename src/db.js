@@ -6,10 +6,15 @@ class Database {
     this.pool = null;
   }
 async connect() {
+    // Veritabanı bilgileri .env dosyasından alınmalı
+    if (!process.env.MYSQL_HOST || !process.env.MYSQL_USER || !process.env.MYSQL_PASSWORD) {
+      console.warn("⚠️ MySQL ortam değişkenleri eksik! .env dosyasını kontrol edin.");
+    }
+
     this.pool = mysql.createPool({
-      host: process.env.MYSQL_HOST || "127.0.0.1",      // Değişken adlarına dikkat
-      user: process.env.MYSQL_USER || "botmanager_user",           // .env ile aynı olmalı
-      password: process.env.MYSQL_PASSWORD || "Szxc8030.Z",       // .env ile aynı olmalı
+      host: process.env.MYSQL_HOST || "127.0.0.1",
+      user: process.env.MYSQL_USER || "root",
+      password: process.env.MYSQL_PASSWORD || "",
       database: process.env.MYSQL_DATABASE || "botmanager",
       waitForConnections: true,
       connectionLimit: 10,
@@ -58,14 +63,14 @@ async ensureSchemaUpgrades() {
         message_wweb_id VARCHAR(255) UNIQUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      // Payment Stages (Dümenler)
+      // Service Stages (Hizmet Aşamaları - Danışmanlık süreç takibi)
       `CREATE TABLE IF NOT EXISTS payment_stages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         stage_order INT NOT NULL,
         name VARCHAR(100),
-        amount DECIMAL(15,2),
-        script_initial TEXT,
-        script_persuasion TEXT,
+        amount DECIMAL(15,2) DEFAULT 0,
+        script_initial TEXT COMMENT 'Karşılama mesajı',
+        script_persuasion TEXT COMMENT 'Açıklama mesajı',
         doc_template_id INT NULL,
         UNIQUE KEY(stage_order)
       )`,
@@ -114,37 +119,39 @@ async ensureSchemaUpgrades() {
     }
   }
 
-// VE class içine şu fonksiyonun tam haliyle ekli olduğundan emin olun:
+// Başlangıç verileri
   async seedInitialData() {
     try {
-        // Karakterler
+        // Bot Karakterleri (Dini Rehberlik için uygun profiller)
         const [pCount] = await this.pool.execute("SELECT COUNT(*) as c FROM bot_profiles");
         if (pCount[0].c === 0) {
-            console.log("🔄 Karakterler yükleniyor...");
+            console.log("🔄 Bot karakterleri yükleniyor...");
             const profiles = [
-                ['Demirkan Güçlü', 'Hesap Kurtarma Uzmanı', 'Manipülatif, Sonuç Odaklı', 'Son bir adım kaldı.', 'Sen, şirketin kapatıcısı ve son işlem uzmanısın.'],
-                ['Julian Sterling', 'Finans Direktörü', 'Elit, Kurumsal', 'Prosedürler duvarlardır.', 'Sen, elit bir Finans Direktörüsün.'],
-                ['Ertan Eker', 'Uyum Sorumlusu', 'Kuralcı, Net', 'Kural budur.', 'Sen kuralcı birisin.']
+                ['Yardımcı Asistan', 'Dini Rehberlik Asistanı', 'Samimi, Yardımsever', 'Her zaman yanınızdayız.', 'Sen, samimi ve yardımsever bir dini rehberlik asistanısın. İnsanlara nazikçe yardımcı olursun.'],
+                ['Bilgi Danışmanı', 'İslami Bilgi Danışmanı', 'Bilgili, Saygılı', 'Doğru bilgiyle hizmetinizde.', 'Sen, İslami konularda bilgi veren saygılı bir danışmansın.'],
+                ['Randevu Koordinatörü', 'Hoca Randevu Asistanı', 'Düzenli, Profesyonel', 'Randevunuz bizim önceliğimiz.', 'Sen, hoca ile görüşme randevularını organize eden düzenli bir asistansın.']
             ];
             for (const p of profiles) await this.pool.execute("INSERT INTO bot_profiles (name, title, short_description, slogan, prompt_description) VALUES (?,?,?,?,?)", p);
         }
-        // Dümenler
+        // Hizmet Türleri (Meşru randevu/danışmanlık hizmetleri)
         const [sCount] = await this.pool.execute("SELECT COUNT(*) as c FROM payment_stages");
         if (sCount[0].c === 0) {
-            console.log("🔄 Dümenler yükleniyor...");
+            console.log("🔄 Hizmet türleri yükleniyor...");
             const stages = [
-                [1, '1. GOL - Dosya Masrafı', 3000, 'İşlem için 3000 TL gereklidir.', 'Ödenmezse iptal olur.'],
-                [2, '2. GOL - Vergi', 9452, 'Vergi ödemesi çıkmıştır.', 'Devlet prosedürüdür.'],
-                [3, '3. GOL - HATTRICK', 20000, 'Bloke çözme bedeli.', 'Bloke kalkmadan işlem yapılamaz.']
+                [1, 'İlk Görüşme', 0, 'Hoş geldiniz! Size nasıl yardımcı olabiliriz?', 'İlk tanışma ve ihtiyaç belirleme.'],
+                [2, 'Danışmanlık Randevusu', 0, 'Hocamızla görüşme randevusu ayarlayabiliriz.', 'Detaylı görüşme için randevu.'],
+                [3, 'Takip Görüşmesi', 0, 'Durumunuzu takip etmek için tekrar görüşebiliriz.', 'Süreç takibi ve destek.']
             ];
             for (const s of stages) await this.pool.execute("INSERT INTO payment_stages (stage_order, name, amount, script_initial, script_persuasion) VALUES (?,?,?,?,?)", s);
         }
-        // Kısayollar
+        // Kısayollar (Yardımcı mesaj şablonları)
         const [shCount] = await this.pool.execute("SELECT COUNT(*) as c FROM shortcuts");
         if (shCount[0].c === 0) {
              console.log("🔄 Kısayollar yükleniyor...");
-             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('guven_ssl', 'Tüm işlemler SSL sertifikası ile korunmaktadır.', 'guven')");
-             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('baski_gunsonu', 'Gün sonu kapanışı yapılıyor, acele ediniz.', 'baski')");
+             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('hosgeldin', 'Hoş geldiniz! Size nasıl yardımcı olabilirim?', 'genel')");
+             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('randevu', 'Hocamızla görüşme için randevu ayarlayabiliriz. Uygun olduğunuz gün ve saati belirtir misiniz?', 'randevu')");
+             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('tesekkur', 'Rica ederim, her zaman yardımcı olmaktan memnuniyet duyarız. Allah razı olsun.', 'genel')");
+             await this.pool.execute("INSERT INTO shortcuts (keyword, message_content, category) VALUES ('namaz_vakti', 'Namaz vakitleri için: https://namazvakti.diyanet.gov.tr adresini ziyaret edebilirsiniz.', 'bilgi')");
         }
     } catch (e) { console.error("Seed hatası:", e); }
   }
@@ -266,7 +273,66 @@ async ensureSchemaUpgrades() {
   async getDocTemplate(id) { try { const [rows] = await this.pool.execute("SELECT * FROM doc_templates WHERE id=?",[id]); return rows[0]; } catch(e){ return null; } }
   async saveDocTemplate(data) { if(data.id) { await this.pool.execute("UPDATE doc_templates SET name=?, html_content=? WHERE id=?",[data.name,data.html_content,data.id]); return data.id; } else { const[r]=await this.pool.execute("INSERT INTO doc_templates (name,html_content) VALUES (?,?)",[data.name,data.html_content]); return r.insertId; } }
 
-  async getAvailableBank(amount=0) { try { const [rows]=await this.pool.execute("SELECT * FROM banks WHERE active=1 AND is_blocked=0 ORDER BY RAND() LIMIT 1"); return rows[0]; } catch(e){ return null; } }
+  // Sohbet geçmişi (AI için)
+  async getChatHistory(chatId, limit = 10) {
+    try {
+      const [rows] = await this.pool.execute(
+        "SELECT direction, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
+        [chatId, limit]
+      );
+      return rows.reverse();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Rastgele dua getir
+  async getRandomDua(category = null) {
+    try {
+      const duas = await this.getDuas(category);
+      if (duas.length === 0) return null;
+      return duas[Math.floor(Math.random() * duas.length)];
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Dualar tablosu (opsiyonel)
+  async getDuas(category = null) {
+    try {
+      if (category) {
+        const [rows] = await this.pool.execute("SELECT * FROM duas WHERE category = ?", [category]);
+        return rows;
+      }
+      const [rows] = await this.pool.execute("SELECT * FROM duas");
+      return rows;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Aktivite logu
+  async logActivity(data) {
+    try {
+      // Aktivite loglama opsiyonel - tablo yoksa sessizce geç
+      await this.pool.execute(
+        "INSERT INTO activity_logs (chat_id, profile_id, client_id, action, details, performed_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+        [data.chatId, data.profileId, data.clientId, data.action, JSON.stringify(data.details || {}), data.performedBy || 'bot']
+      );
+    } catch (e) {
+      // Tablo yoksa hata verme
+    }
+  }
+
+  // Bad words listesi (content filter için)
+  async getBadWords() {
+    try {
+      const [rows] = await this.pool.execute("SELECT word, severity FROM bad_words");
+      return rows;
+    } catch (e) {
+      return []; // Varsayılan listeyi kullan
+    }
+  }
 }
 
 module.exports = new Database();
